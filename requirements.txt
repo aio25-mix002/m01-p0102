@@ -1,3 +1,4 @@
+# Install main packages
 transformers==4.52.4
 bitsandbytes==0.46.0
 bitsandbytes
@@ -10,4 +11,6 @@ langchain-community==0.3.24
 langchain_huggingface==0.2.0
 python-dotenv==1.1.0
 pypdf
-streamlit
+sentencepiece
+# Install dev packages
+streamlit==1.46.0
