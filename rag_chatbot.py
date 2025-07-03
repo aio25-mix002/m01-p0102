@@ -1,3 +1,4 @@
+import argparse
 import torch
 import os
 import chromadb
@@ -42,8 +43,8 @@ if "chat_history" not in st.session_state:
     st.session_state.chat_history = []
 if "pdf_processed" not in st.session_state:
     st.session_state.pdf_processed = False
-if "pdf_name" not in st.session_state:
-    st.session_state.pdf_name = ""
+if "pdf_file_names" not in st.session_state:
+    st.session_state.pdf_file_names = []
 
 
 @st.cache_resource
@@ -54,19 +55,35 @@ def load_embeddings():
 
 
 @st.cache_resource
-def load_llm():
+def load_llm(use_quantization=True):
     MODEL_NAME = "lmsys/vicuna-7b-v1.5"
-    bnb_config = BitsAndBytesConfig(
-        load_in_4bit=True,  # Hoặc load_in_8bit=True
-        bnb_4bit_use_double_quant=True,
-        bnb_4bit_compute_dtype=torch.bfloat16,
-        bnb_4bit_quant_type="nf4",  # nf4 là lựa chọn tốt cho mô hình lớn
-    )
+    model = None
+    if use_quantization:
+        # Use BitsAndBytesConfig for quantization
+        logger.info("Loading model with quantization")
+        bnb_config = BitsAndBytesConfig(
+            load_in_4bit=True,  # Hoặc load_in_8bit=True
+            bnb_4bit_use_double_quant=True,
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_quant_type="nf4",  # nf4 là lựa chọn tốt cho mô hình lớn
+        )
 
-    # Load model với quantization
-    model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME, quantization_config=bnb_config, device_map="auto"
-    )
+        # Load model với quantization
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME, quantization_config=bnb_config, device_map="auto"
+        )
+    else:
+        # Load model without quantization
+        logger.info("Loading model without quantization")
+
+        # We are using float16 for better performance and lower memory usage
+        # This requires a GPU with at least 12GB VRAM for Vicuna-7B
+        # If you have a GPU with less VRAM, consider using quantization
+        # Good read: https://pytorch.org/blog/what-every-user-should-know-about-mixed-precision-training-in-pytorch/
+
+        model = AutoModelForCausalLM.from_pretrained(
+            MODEL_NAME, device_map="auto", torch_dtype=torch.float16
+        )
     tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
     model_pipeline = pipeline(
         "text-generation",
@@ -87,37 +104,45 @@ def get_chroma_client(allow_reset=False):
     )
 
 
-def process_pdf(uploaded_file):
-    with tempfile.NamedTemporaryFile(
-        delete=False, prefix=uploaded_file.name, suffix=".pdf"
-    ) as tmp_file:
-        tmp_file.write(uploaded_file.getvalue())
-        tmp_file_path = tmp_file.name
+def process_pdf(uploaded_files):
+    """Process multiple uploaded PDF files, combine their docs, and build a single retriever and RAG chain."""
+    all_docs = []
+    file_names = []
+    for uploaded_file in uploaded_files:
+        with tempfile.NamedTemporaryFile(
+            delete=False, prefix=uploaded_file.name, suffix=".pdf"
+        ) as tmp_file:
+            tmp_file.write(uploaded_file.getvalue())
+            tmp_file_path = tmp_file.name
+        loader = PyPDFLoader(tmp_file_path)
+        documents = loader.load()
+        semantic_splitter = SemanticChunker(
+            embeddings=st.session_state.embeddings,
+            buffer_size=1,
+            breakpoint_threshold_type="percentile",
+            breakpoint_threshold_amount=95,
+            min_chunk_size=500,
+            add_start_index=True,
+        )
+        docs = semantic_splitter.split_documents(documents)
+        # for doc in docs:
+        #     # Add file name to doc metadata for citation
+        #     doc.metadata["source"] = uploaded_file.name
+        all_docs.extend(docs)
+        file_names.append(uploaded_file.name)
+        os.unlink(tmp_file_path)
 
-    loader = PyPDFLoader(tmp_file_path)
-    documents = loader.load()
-
-    semantic_splitter = SemanticChunker(
-        embeddings=st.session_state.embeddings,
-        buffer_size=1,
-        breakpoint_threshold_type="percentile",
-        breakpoint_threshold_amount=95,
-        min_chunk_size=500,
-        add_start_index=True,
-    )
-
-    docs = semantic_splitter.split_documents(documents)
     chroma_client = get_chroma_client(allow_reset=True)
     chroma_client.reset()  # empties and completely resets the database. This is destructive and not reversible.
 
     vector_db = Chroma.from_documents(
-        documents=docs, embedding=st.session_state.embeddings, client=chroma_client
+        documents=all_docs, embedding=st.session_state.embeddings, client=chroma_client
     )
-
     retriever = vector_db.as_retriever()
     # prompt = hub.pull("rlm/rag-prompt")
     prompt = promptManager.load_prompt_template_from_file("rag_with_memory.v1.txt")
 
+    # Build the RAG chain
     rag_chain = (
         {
             "context": itemgetter("question")
@@ -132,8 +157,7 @@ def process_pdf(uploaded_file):
         | st.session_state.llm
         | StrOutputParser()
     )
-    os.unlink(tmp_file_path)
-    return rag_chain, len(docs)
+    return rag_chain, len(all_docs), file_names
 
 
 def add_message(role, content):
@@ -171,7 +195,7 @@ def retrieve_chat_history():
     return st.session_state.chat_history[-message_threshold:-1]
 
 
-def main():
+def main(use_quantization = True):
     st.set_page_config(
         page_title="PDF RAG Chatbot", layout="wide", initial_sidebar_state="expanded"
     )
@@ -189,7 +213,7 @@ def main():
             st.warning("⏳ Đang tải models...")
             with st.spinner("Đang tải AI models..."):
                 st.session_state.embeddings = load_embeddings()
-                st.session_state.llm = load_llm()
+                st.session_state.llm = load_llm(use_quantization=use_quantization)
                 st.session_state.models_loaded = True
             st.success("✅ Models đã sẵn sàng!")
             st.rerun()
@@ -200,29 +224,31 @@ def main():
 
         # Upload PDF
         st.subheader("📄 Upload tài liệu")
-        uploaded_file = st.file_uploader("Chọn file PDF", type="pdf")
-        if uploaded_file and st.button("🔄 Xử lý PDF", use_container_width=True):
-            with st.spinner("Đang xử lý..."):
-                st.session_state.rag_chain, num_chunks = process_pdf(uploaded_file)
-                st.session_state.pdf_processed = True
-                st.session_state.pdf_name = uploaded_file.name
+        uploaded_files = st.file_uploader(
+            "Chọn file PDF", type="pdf", accept_multiple_files=True
+        )
 
-                # Reset chat history khi upload PDF mới
-                clear_chat()
-                add_message(
-                    "assistant",
-                    f"✅ Đã xử lý thành công file **{uploaded_file.name}**!\n\n📊 Tài liệu được chia thành {num_chunks} phần. Bạn có thể bắt đầu đặt câu hỏi về nội dung tài liệu.",
-                )
-            st.rerun()
+        if uploaded_files:
+            if st.button("🔄 Xử lý PDF", use_container_width=True):
+                with st.spinner("Đang xử lý PDF..."):
+                    st.session_state.rag_chain, num_chunks, file_names = process_pdf(
+                        uploaded_files
+                    )
+                    st.session_state.pdf_processed = True
+                    st.session_state.pdf_file_names = file_names
+                    # Reset chat history khi upload PDF mới
+                    clear_chat()
+                    add_message(
+                        "assistant",
+                        f"✅ Đã xử lý thành công {len(file_names)} file PDF: **{', '.join(file_names)}**!\n\n📊 Tổng cộng {num_chunks} phần. Bạn có thể bắt đầu đặt câu hỏi về nội dung tài liệu.",
+                    )
+                st.rerun()
 
         # PDF status
         if st.session_state.pdf_processed:
-            st.success(f"📄 Đã tải: {st.session_state.pdf_name}")
+            st.success(f"📄 Đã tải: {'; '.join(st.session_state.pdf_file_names)}")
         else:
-            if uploaded_file:
-                st.info("📄 Chưa xử lý tài liệu")
-            else:
-                st.info("📄 Chưa có tài liệu")
+            st.info("📄 Chưa có tài liệu")
 
         # Chat controls
         st.divider()
@@ -301,4 +327,14 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="PDF RAG Chatbot")
+    parser.add_argument(
+        "--no-quantization",
+        action="store_true",
+        help="Disable quantization (requires more GPU memory)",
+    )
+
+    args = parser.parse_args()
+    use_quantization = not args.no_quantization
+
+    main(use_quantization=use_quantization)
