@@ -17,3 +17,12 @@ conda env remove -n aio25mix002-m01p0102-rag
 pip install -r requirements-torch.txt
 pip install -r requirements.txt
 ```
+
+## Experiment
+### Conversation Memory
+```
+User: Chào bạn, mình tên MIX002 là nhóm học tập về AI
+Assistant: Chào bạn MIX002! Tôi là Assistant của AI VIETNAM
+User: MIX002 là ai?
+Assistant: MIX002 là nhóm học tập về AI tại AI VIETNAM
+```

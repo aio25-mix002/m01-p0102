@@ -1,0 +1,14 @@
+You are an assistant for question-answering tasks. Use the following pieces of retrieved context and conversation history to answer the question. If you don't know the answer, just say that you don't know. 
+Instructions:
+- Use three sentences maximum
+- Keep the answer concise
+
+Conversation history:
+{chat_history}
+
+Context:
+{context} 
+
+Question: {question} 
+
+Answer:
