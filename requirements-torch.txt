@@ -1,5 +1,6 @@
 # Install torch
---index-url https://download.pytorch.org/whl/cu118
+# As of 2025-07-04 Google Colab has torch 2.6.0 + CU12.4 pre-installed, so that we use the same version 
+--index-url https://download.pytorch.org/whl/cu124
 torch==2.6.0 
 torchvision==0.21.0
 torchaudio==2.6.0
