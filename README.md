@@ -1,4 +1,17 @@
 # README
+- [README](#readme)
+  - [Setups](#setups)
+    - [Create environments](#create-environments)
+    - [Install packages](#install-packages)
+    - [Environment variables](#environment-variables)
+  - [Run application](#run-application)
+    - [Via CLI](#via-cli)
+    - [Via VS Code Launch Profile](#via-vs-code-launch-profile)
+    - [Via Google Colab](#via-google-colab)
+  - [Experiment](#experiment)
+    - [RAG flow](#rag-flow)
+    - [Conversation Memory](#conversation-memory)
+
 
 ## Setups
 ### Create environments
@@ -23,6 +36,25 @@ pip install -r requirements.txt
 We can create an `.env.local` to store environment variables of the application. 
 An example of variables can be found in `.env.example`. 
 
+## Run application
+### Via CLI
+**Within quantization**
+```
+streamlit run ./rag_chatbot.py
+```
+
+**Without quantization**
+```
+streamlit run ./rag_chatbot.py -- --no-quantization
+```
+- The `--` is needed to separate Streamlit's arguments from your script's arguments.
+
+### Via VS Code Launch Profile
+We can also start the app via the launch profile.
+- On windows: Debug Streamlit App (Miniconda - Windows)
+
+### Via Google Colab
+We can run this app via Google Colab, checkout `runbook_m01p0102.ipynb` to learn more.
 
 ## Experiment
 ### RAG flow
