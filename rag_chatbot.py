@@ -143,6 +143,9 @@ def process_pdf(uploaded_files):
     prompt = promptManager.load_prompt_template_from_file("rag_with_memory.v1.txt")
 
     # Build the RAG chain
+    # This use  LangChain Expression Language (LCEL) 
+    # where  LangChain overrides the Python pipe operator (|) for its Runnable objects
+    # Ref: https://python.langchain.com/docs/concepts/lcel/
     rag_chain = (
         {
             "context": itemgetter("question")
