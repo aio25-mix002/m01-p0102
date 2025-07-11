@@ -54,8 +54,9 @@ We can also start the app via the launch profile.
 - On windows: Debug Streamlit App (Miniconda - Windows)
 
 ### Via Google Colab
-We can run this app via Google Colab, checkout `runbook_m01p0102.ipynb` to learn more.
+We can run this app via Google Colab Jupyter Notebook, checkout [runbook_m01p0102.ipynb](./runbook_m01p0102.ipynb) to get the notebook file.
 
+Or click this link for the direct-link to Google Colab: [Open in Google Colab](https://colab.research.google.com/github/aio25-mix002/m01-p0102/blob/main/runbook_m01p0102.ipynb)
 ## Experiment
 ### RAG flow
 We can use the sample file from `./examples/YOLOv10_Tutorials.pdf`. 
