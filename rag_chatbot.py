@@ -199,6 +199,12 @@ def retrieve_chat_history():
 
 
 def main(use_quantization = True):
+    if use_quantization:
+        logger.info("Using quantization for model loading")
+    else:
+        logger.info("Using full precision for model loading")
+    
+    # Streamlit app configuration
     st.set_page_config(
         page_title="PDF RAG Chatbot", layout="wide", initial_sidebar_state="expanded"
     )
@@ -339,5 +345,5 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     use_quantization = not args.no_quantization
-
+    
     main(use_quantization=use_quantization)
